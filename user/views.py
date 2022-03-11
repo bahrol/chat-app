@@ -4,8 +4,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_jwt.serializers import JSONWebTokenSerializer
 
-from .models import User, Group, GroupMember
-from .serializers import UserSerializer, GroupSerializer
+from .models import User, Group, GroupMember, GroupJoinRequest
+from .serializers import UserSerializer, GroupSerializer, GroupJoinRequestSerializer
 
 
 # Create your views here.
@@ -80,7 +80,7 @@ class MyGroupView(APIView):
             return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
 
         group = gm.group
-        group_member_queryset = GroupMember.objects.filter(group=group)
+        group_member_queryset = GroupMember.objects.filter(group=group).order_by('-timestamp')
         members = []
         for group_member in group_member_queryset:
             member = {
@@ -97,3 +97,120 @@ class MyGroupView(APIView):
             "members": members
         }
         return Response(response_data, status=status.HTTP_200_OK)
+
+
+class JoinRequestView(APIView):
+    join_request_serializer = GroupJoinRequestSerializer
+
+    def get(self, request):
+        user = request.user
+        join_requests_queryset = GroupJoinRequest.objects.filter(user=user).order_by('-timestamp')
+
+        join_requests = []
+        for req in join_requests_queryset:
+            join_req = {
+                "id": req.id,
+                "groupId": req.group.id,
+                "userId": req.user.id,
+                "data": req.timestamp.timestamp()
+            }
+            join_requests.append(join_req)
+
+        response_data = {
+            "joinRequests": join_requests
+        }
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        user = request.user
+        if GroupMember.objects.filter(user=user).exists():
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            group_id = request.data['groupId']
+        except KeyError:
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+        data = {
+            "group": group_id,
+            "user": user.id,
+        }
+        ser = self.join_request_serializer(data=data)
+        if not ser.is_valid():
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+        response_data = {
+            "message": "successful"
+        }
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
+class JoinRequestGroupView(APIView):
+    def get(self, request):
+        user = request.user
+        try:
+            gm = GroupMember.objects.get(user=user)
+        except GroupMember.DoesNotExist:    # User is not in any groups
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+        if gm.role != GroupMember.OWNER:   # User is not admin
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+        join_requests_queryset = GroupJoinRequest.objects.filter(group=gm.group).order_by('-timestamp')
+
+        join_requests = []
+        for req in join_requests_queryset:
+            join_req = {
+                "id": req.id,
+                "groupId": req.group.id,
+                "userId": req.user.id,
+                "data": req.timestamp.timestamp()
+            }
+            join_requests.append(join_req)
+
+        response_data = {
+            "joinRequests": join_requests
+        }
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
+class AcceptJoinRequestView(APIView):
+    def post(self, request):
+        user = request.user
+        try:
+            join_request_id = request.data['joinRequestId']
+        except KeyError:
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            gm = GroupMember.objects.get(user=user)
+        except GroupMember.DoesNotExist:    # User is not in any groups
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+        if gm.role != GroupMember.OWNER:   # User is not admin
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            join_request = GroupJoinRequest.objects.get(id=join_request_id, group=gm.group)
+        except GroupJoinRequest.DoesNotExist:
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+        join_request.is_accepted = True
+        join_request.save()
+
+        response_data = {
+            "message": "successful"
+        }
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
+
