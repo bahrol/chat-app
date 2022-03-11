@@ -41,3 +41,11 @@ class User(AbstractUser):
 
     def __str__(self):
         return f'{self.id}: {self.email}'
+
+
+class Group(models.Model):
+    name = models.CharField(max_length=50)
+    description = models.CharField(max_length=150)
+
+    def __str__(self):
+        return self.name
