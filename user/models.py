@@ -49,3 +49,18 @@ class Group(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class GroupMember(models.Model):
+    OWNER = "OWNER"
+    NORMAL = "NORMAL"
+
+    ROLE_CHOICES = (
+        (OWNER, "Owner"),
+        (NORMAL, "Normal"),
+    )
+
+    user = models.ForeignKey(User, unique=True, on_delete=models.CASCADE)
+    group = models.ForeignKey(Group, on_delete=models.CASCADE)
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES)
+    timestamp = models.DateTimeField(auto_now_add=True)
