@@ -13,7 +13,6 @@ class ChatListView(APIView):
         user = request.user
         chat_boxes = ChatBox.objects.filter(Q(user1=user) | Q(user2=user))
         chat_boxes = sorted(chat_boxes, key=lambda cb: cb.last_message.timestamp)
-        # TODO check sorting
 
         chats = []
         for chat_box in chat_boxes:
@@ -64,7 +63,7 @@ class ChatView(APIView):
             sender_user = chat_box.user1 if msg.sender == 1 else chat_box.user2
             message = {
                 "message": msg.text,
-                "date": msg.timestamp.timestamp(),
+                "date": msg.timestamp.strftime("%s"),
                 "sentby": sender_user.id,
             }
             messages.append(message)
@@ -96,8 +95,12 @@ class ChatView(APIView):
             response_data = {"error": {"enMessage": "Bad request!"}}
             return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
 
-        chat_box = ChatBox(user1=user, user2=second_user)
-        chat_box.save()
+        chat_box_qs = ChatBox.objects.filter(Q(user1=user, user2=second_user) | Q(user1=second_user, user2=user))
+        if not chat_box_qs.exists():
+            chat_box = ChatBox(user1=user, user2=second_user)
+            chat_box.save()
+        else:
+            chat_box = chat_box_qs.last()
 
         msg = Message(sender=1, chat=chat_box, text=text_message)
         msg.save()

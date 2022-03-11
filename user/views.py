@@ -21,8 +21,7 @@ class SignupView(APIView):
             password = self.request.data.get("password")
             token_serializer = JSONWebTokenSerializer(data={"email": user.email, "userId": user.id, "password": password})
             token_serializer.is_valid(raise_exception=True)
-            response_data = ser.data
-            response_data.update({"token": token_serializer.validated_data.get("token"), "message": "successful"})
+            response_data = {"token": token_serializer.validated_data.get("token"), "message": "successful"}
             return Response(response_data, status=status.HTTP_200_OK)
         else:
             response_data = {"error": {"enMessage": "Bad request!"}}
@@ -35,13 +34,17 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        token_serializer = JSONWebTokenSerializer(data=request.data)
+        try:
+            user = User.objects.get(email=request.data['email'])
+        except User.DoesNotExist:
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+
+        token_serializer = JSONWebTokenSerializer(data={"email": user.email, "userId": user.id, "password": request.data.get('password')})
 
         if token_serializer.is_valid():
-            user = self.query_set.get(email=request.data.get("email"))
-            ser = self.serializer_class(user)
-            response_data = ser.data
-            response_data.update({"token": token_serializer.validated_data.get("token"), "message": "successful"})
+            response_data = {"token": token_serializer.validated_data.get("token"), "message": "successful"}
             return Response(response_data, status=status.HTTP_200_OK)
         else:
             response_data = {"error": {"enMessage": "Bad request!"}}
@@ -53,18 +56,24 @@ class GroupView(APIView):
     query_set = Group.objects.all()
 
     def get(self, request):
-        ser = self.serializer_class(data=self.query_set, many=True)
+        ser = self.serializer_class(self.query_set, many=True)
         response_data = {"groups": ser.data}
         return Response(response_data, status=status.HTTP_200_OK)
 
     def post(self, request):    # Create a group
+        user = request.user
+        if GroupMember.objects.filter(user=user).exists():
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
         ser = self.serializer_class(data=request.data)
         if not ser.is_valid():
             response_data = {"error": {"enMessage": "Bad request!"}}
             return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
         ser.save()
         response_data = {"group": {"id": ser.data.get('id')}, "message": "successful"}
-        GroupMember.objects.create(group=ser.data.get('id'), user=request.user, role=GroupMember.OWNER)
+        gp = Group.objects.get(id=ser.data.get('id'))
+        GroupMember.objects.create(group=gp, user=request.user, role=GroupMember.OWNER)
         return Response(response_data, status=status.HTTP_200_OK)
 
 
@@ -113,7 +122,7 @@ class JoinRequestView(APIView):
                 "id": req.id,
                 "groupId": req.group.id,
                 "userId": req.user.id,
-                "data": req.timestamp.timestamp()
+                "date": req.timestamp.strftime('%s')
             }
             join_requests.append(join_req)
 
@@ -170,7 +179,7 @@ class JoinRequestGroupView(APIView):
                 "id": req.id,
                 "groupId": req.group.id,
                 "userId": req.user.id,
-                "data": req.timestamp.timestamp()
+                "date": req.timestamp.strftime('%s')
             }
             join_requests.append(join_req)
 
@@ -205,6 +214,7 @@ class AcceptJoinRequestView(APIView):
             response_data = {"error": {"enMessage": "Bad request!"}}
             return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
 
+        GroupMember.objects.create(group=gm.group, user=join_request.user, role=GroupMember.NORMAL)
         join_request.is_accepted = True
         join_request.save()
 
@@ -235,7 +245,7 @@ class ConnectionRequestView(APIView):
             connection_request = {
               "connectionRequestId": req.id,
               "groupId": req.applicant_group.id,
-              "sent": req.timestamp.timestamp(),
+              "sent": req.timestamp.strftime("%s"),
             }
             requests.append(connection_request)
         response_data = {
