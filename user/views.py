@@ -4,8 +4,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_jwt.serializers import JSONWebTokenSerializer
 
-from .models import User, Group, GroupMember, GroupJoinRequest
-from .serializers import UserSerializer, GroupSerializer, GroupJoinRequestSerializer
+from .models import User, Group, GroupMember, GroupJoinRequest, GroupConnectionRequest
+from .serializers import UserSerializer, GroupSerializer, GroupJoinRequestSerializer, GroupConnectionRequestSerializer
 
 
 # Create your views here.
@@ -62,6 +62,7 @@ class GroupView(APIView):
         if not ser.is_valid():
             response_data = {"error": {"enMessage": "Bad request!"}}
             return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+        ser.save()
         response_data = {"group": {"id": ser.data.get('id')}, "message": "successful"}
         GroupMember.objects.create(group=ser.data.get('id'), user=request.user, role=GroupMember.OWNER)
         return Response(response_data, status=status.HTTP_200_OK)
@@ -141,7 +142,7 @@ class JoinRequestView(APIView):
         if not ser.is_valid():
             response_data = {"error": {"enMessage": "Bad request!"}}
             return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
-
+        ser.save()
         response_data = {
             "message": "successful"
         }
@@ -213,4 +214,94 @@ class AcceptJoinRequestView(APIView):
         return Response(response_data, status=status.HTTP_200_OK)
 
 
+class ConnectionRequestView(APIView):
+    serializer_class = GroupConnectionRequestSerializer
 
+    def get(self, request):
+        user = request.user
+        try:
+            gm = GroupMember.objects.get(user=user)
+        except GroupMember.DoesNotExist:    # User is not in any groups
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+        if gm.role != GroupMember.OWNER:   # User is not admin
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+        connection_requests = GroupConnectionRequest.objects.filter(receiver_group=gm.group).order_by('-timestamp')
+        requests = []
+        for req in connection_requests:
+            connection_request = {
+              "connectionRequestId": req.id,
+              "groupId": req.applicant_group.id,
+              "sent": req.timestamp.timestamp(),
+            }
+            requests.append(connection_request)
+        response_data = {
+            "requests": requests
+        }
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        user = request.user
+
+        try:
+            group_id = request.data['groupId']
+        except KeyError:
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            gm = GroupMember.objects.get(user=user)
+        except GroupMember.DoesNotExist:    # User is not in any groups
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+        if gm.role != GroupMember.OWNER:   # User is not admin
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+        data = {
+            "applicant_group": gm.group.id,
+            "receiver_group": group_id,
+        }
+        ser = self.serializer_class(data=data)
+        if not ser.is_valid():
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+        ser.save()
+        response_data = {"message": "successful"}
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
+class AcceptConnectionRequestView(APIView):
+    def post(self, request):
+        user = request.user
+
+        try:
+            group_id = request.data['groupId']
+        except KeyError:
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            gm = GroupMember.objects.get(user=user)
+        except GroupMember.DoesNotExist:  # User is not in any groups
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+        if gm.role != GroupMember.OWNER:  # User is not admin
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            gp_connection_req = GroupConnectionRequest.objects.get(applicant_group_id=group_id, receiver_group=gm.group)
+        except GroupConnectionRequest.DoesNotExist:
+            response_data = {"error": {"enMessage": "Bad request!"}}
+            return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+
+        gp_connection_req.is_accepted = True
+        gp_connection_req.save()
+        response_data = {"message": "successful"}
+        return Response(response_data, status=status.HTTP_200_OK)

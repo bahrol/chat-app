@@ -10,4 +10,6 @@ urlpatterns = [
     path('join-requests/', views.JoinRequestView.as_view(), name='join_request'),
     path('join-requests/group/', views.JoinRequestGroupView.as_view(), name='group_join_requests'),
     path('join-requests/accept/', views.AcceptJoinRequestView.as_view(), name='accept_join_requests'),
+    path('connection-requests/', views.ConnectionRequestView.as_view(), name='connection_requests'),
+    path('connection-requests/accept/', views.AcceptConnectionRequestView.as_view(), name='accept_connection_requests'),
 ]
