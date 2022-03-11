@@ -71,3 +71,10 @@ class GroupJoinRequest(models.Model):
     group = models.ForeignKey(Group, on_delete=models.CASCADE)
     is_accepted = models.BooleanField(default=False)
     timestamp = models.DateTimeField(auto_now_add=True)
+
+
+class GroupConnectionRequest(models.Model):
+    applicant_group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='applicant')
+    receiver_group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='receiver')
+    is_accepted = models.BooleanField(default=False)
+    timestamp = models.DateTimeField(auto_now_add=True)
