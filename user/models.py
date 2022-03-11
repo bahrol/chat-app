@@ -60,7 +60,7 @@ class GroupMember(models.Model):
         (NORMAL, "Normal"),
     )
 
-    user = models.ForeignKey(User, unique=True, on_delete=models.CASCADE)
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
     group = models.ForeignKey(Group, on_delete=models.CASCADE)
     role = models.CharField(max_length=10, choices=ROLE_CHOICES)
     timestamp = models.DateTimeField(auto_now_add=True)
