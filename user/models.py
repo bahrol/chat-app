@@ -19,12 +19,12 @@ class CustomUserManager(UserManager):
         if extra_fields.get('is_superuser') is not True:
             raise ValueError('Superuser must have is_superuser=True.')
 
-        return self._create_user(name=name, email=email, password=password, **extra_fields)
+        return self._create_user(username=email, name=name, email=email, password=password, **extra_fields)
 
-    def create_user(self, name, password=None, **extra_fields):
+    def create_user(self, name, email=None, password=None, **extra_fields):
         if name is None:
             raise ValueError('users must have a name.')
-        user = User(name=name, **extra_fields)
+        user = User(username=email, name=name, email=email, **extra_fields)
         user.set_password(password)
         user.save()
         return user
@@ -37,7 +37,7 @@ class User(AbstractUser):
 
     objects = CustomUserManager()
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = []
+    REQUIRED_FIELDS = ['name']
 
     def __str__(self):
         return f'{self.id}: {self.email}'
@@ -48,12 +48,12 @@ class Group(models.Model):
     description = models.CharField(max_length=150)
 
     def __str__(self):
-        return self.name
+        return f"{self.id}: {self.name}"
 
 
 class GroupMember(models.Model):
-    OWNER = "OWNER"
-    NORMAL = "NORMAL"
+    OWNER = "Owner"
+    NORMAL = "Normal"
 
     ROLE_CHOICES = (
         (OWNER, "Owner"),
