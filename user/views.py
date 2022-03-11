@@ -19,7 +19,7 @@ class SignupView(APIView):
         if ser.is_valid():
             user = ser.save()
             password = self.request.data.get("password")
-            token_serializer = JSONWebTokenSerializer(data={"email": user.email, "password": password})
+            token_serializer = JSONWebTokenSerializer(data={"email": user.email, "userId": user.id, "password": password})
             token_serializer.is_valid(raise_exception=True)
             response_data = ser.data
             response_data.update({"token": token_serializer.validated_data.get("token"), "message": "successful"})
